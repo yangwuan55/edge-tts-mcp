@@ -1,0 +1,41 @@
+# Edge-TTS MCP Server 配置
+
+server:
+  host: localhost
+  port: 8000
+  log_level: INFO
+
+defaults:
+  voice: en-US-EmmaMultilingualNeural
+  rate: +0%
+  volume: +0%
+  pitch: +0Hz
+  boundary: SentenceBoundary
+  format: mp3
+
+cache:
+  enabled: true
+  ttl: 3600  # 1小时
+
+limits:
+  max_text_length: 5000
+  max_concurrent_requests: 10
+
+# 支持的语音格式
+supported_formats:
+  - mp3
+  - wav
+  - ogg
+
+# 支持的边界类型
+boundary_types:
+  - WordBoundary
+  - SentenceBoundary
+
+# 错误代码配置
+error_codes:
+  validation_error: 1001
+  voice_not_found: 1002
+  parameter_error: 1003
+  network_error: 1004
+  audio_generation_error: 1005

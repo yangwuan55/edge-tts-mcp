@@ -1,0 +1,150 @@
+# Edge-TTS MCP Server 配置文件
+
+server:
+  # 服务器网络配置
+  host: localhost
+  port: 8000
+  
+  # 日志配置
+  log_level: INFO
+  log_file: /var/log/edge-tts-mcp/server.log
+  
+  # 性能配置
+  max_workers: 10
+  request_timeout: 30
+  
+  # SSL配置（可选）
+  ssl_enabled: false
+  ssl_cert_file: /path/to/cert.pem
+  ssl_key_file: /path/to/key.pem
+
+# 默认参数配置
+defaults:
+  # 默认语音
+  voice: en-US-EmmaMultilingualNeural
+  
+  # 语音参数
+  rate: +0%
+  volume: +0%
+  pitch: +0Hz
+  boundary: SentenceBoundary
+  
+  # 输出格式
+  audio_format: mp3
+  subtitle_format: srt
+  
+  # 文本处理
+  max_text_length: 5000
+  text_encoding: utf-8
+
+# 缓存配置
+cache:
+  # 语音列表缓存
+  voices_cache_enabled: true
+  voices_cache_ttl: 3600  # 1小时
+  
+  # 音频缓存
+  audio_cache_enabled: false
+  audio_cache_ttl: 300    # 5分钟
+  audio_cache_max_size: 100  # 最大缓存项目数
+
+# 限制配置
+limits:
+  # 请求限制
+  max_concurrent_requests: 20
+  max_requests_per_minute: 100
+  
+  # 资源限制
+  max_audio_size_mb: 10
+  max_subtitle_length: 10000
+  
+  # 超时限制
+  connection_timeout: 10
+  generation_timeout: 60
+
+# 语音过滤配置
+voice_filters:
+  # 默认显示的语音
+  default_locales:
+    - en-US
+    - zh-CN
+    - ja-JP
+    - ko-KR
+    - es-ES
+    - fr-FR
+    - de-DE
+    - it-IT
+    - ru-RU
+    - pt-BR
+  
+  # 隐藏的语音类型
+  hidden_voice_types:
+    - Standard
+  
+  # 优先显示的语音
+  preferred_voices:
+    - en-US-EmmaMultilingualNeural
+    - zh-CN-XiaoxiaoNeural
+    - ja-JP-NanamiNeural
+    - ko-KR-SoonBokNeural
+
+# 监控配置
+monitoring:
+  # Prometheus 指标
+  metrics_enabled: true
+  metrics_port: 9090
+  
+  # 健康检查
+  health_check_enabled: true
+  health_check_endpoint: /health
+  
+  # 性能监控
+  performance_monitoring: true
+  slow_request_threshold: 5.0  # 秒
+
+# 安全配置
+security:
+  # API 密钥认证（可选）
+  api_key_enabled: false
+  api_keys:
+    - key: your-api-key-here
+      permissions: ["read", "write"]
+  
+  # CORS 配置
+  cors_enabled: true
+  cors_origins:
+    - http://localhost:3000
+    - http://127.0.0.1:3000
+  
+  # 输入验证
+  input_validation: true
+  sanitize_input: true
+  
+  # 文件路径安全
+  safe_file_paths:
+    - /tmp
+    - ./output
+
+# 高级配置
+advanced:
+  # HTTP 客户端配置
+  http_client:
+    max_connections: 100
+    connection_timeout: 10
+    read_timeout: 30
+    
+  # 重试配置
+  retry:
+    max_attempts: 3
+    backoff_factor: 0.5
+    
+  # 音频处理
+  audio:
+    chunk_size: 4096
+    buffer_size: 8192
+    
+  # 字幕生成
+  subtitles:
+    max_line_length: 42
+    min_duration: 0.5
+    max_duration: 8.0

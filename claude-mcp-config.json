@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "edge-tts": {
+      "command": "python",
+      "args": [
+        "/Users/ymr/github/edge-tts/main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/ymr/github/edge-tts/src"
+      },
+      "disabled": false,
+      "autoStart": true,
+      "description": "Edge-TTS MCP Server for text-to-speech conversion"
+    }
+  }
+}

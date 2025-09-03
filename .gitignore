@@ -1,0 +1,4 @@
+*.pyc
+__pycache__/
+*.mp3
+*.json
