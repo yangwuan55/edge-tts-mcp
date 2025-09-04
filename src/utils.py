@@ -3,7 +3,7 @@ import asyncio
 import aiohttp
 from typing import Optional, List, Dict, Any
 import json
-from models import VoiceInfo
+from .models import VoiceInfo
 
 
 class EdgeTTSClient:
@@ -26,8 +26,22 @@ class EdgeTTSClient:
     async def get_voices(self) -> List[Dict[str, Any]]:
         """获取语音列表"""
         try:
+            # 检查缓存
+            import time
+            current_time = time.time()
+            
+            if (self.voices_cache and 
+                current_time - self.last_cache_time < self.cache_ttl):
+                return self.voices_cache
+            
+            # 缓存过期或不存在，重新获取
             from edge_tts import list_voices
             voices = await list_voices()
+            
+            # 更新缓存
+            self.voices_cache = voices
+            self.last_cache_time = current_time
+            
             return voices
         except Exception as e:
             raise Exception(f"获取语音列表失败: {str(e)}")
@@ -159,6 +173,45 @@ class EdgeTTSClient:
             ))
         
         return filtered_voices
+    
+    async def get_voice_list_summary(self) -> Dict[str, Any]:
+        """获取语音列表摘要信息，避免返回大量数据"""
+        try:
+            voices = await self.get_voices()
+            
+            # 按语言区域分组统计
+            locale_stats = {}
+            gender_stats = {"Male": 0, "Female": 0}
+            
+            for voice in voices:
+                locale = voice.get('Locale', 'unknown')
+                gender = voice.get('Gender', 'unknown')
+                
+                if locale not in locale_stats:
+                    locale_stats[locale] = 0
+                locale_stats[locale] += 1
+                
+                if gender in gender_stats:
+                    gender_stats[gender] += 1
+            
+            return {
+                "total_count": len(voices),
+                "locale_statistics": locale_stats,
+                "gender_statistics": gender_stats,
+                "sample_voices": [
+                    {
+                        "name": voice.get('Name'),
+                        "short_name": voice.get('ShortName'),
+                        "locale": voice.get('Locale'),
+                        "gender": voice.get('Gender')
+                    }
+                    for voice in voices[:5]  # 只返回前5个作为示例
+                ],
+                "message": "使用 list_voices 获取完整语音列表，或使用 filter_voices 按条件过滤"
+            }
+            
+        except Exception as e:
+            raise Exception(f"获取语音列表摘要失败: {str(e)}")
 
     async def get_voice_info(self, voice_name: str) -> Optional[VoiceInfo]:
         """获取特定语音的详细信息"""

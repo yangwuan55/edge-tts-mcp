@@ -20,6 +20,8 @@ cache:
 limits:
   max_text_length: 5000
   max_concurrent_requests: 10
+  max_batch_segments: 20  # 批量处理最大语音段数量
+  max_batch_total_chars: 10000  # 批量处理总字符数限制
 
 # 支持的语音格式
 supported_formats:

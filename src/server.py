@@ -5,12 +5,13 @@ from typing import Dict, Any, List, Optional
 from mcp.server.fastmcp import FastMCP
 from mcp.server.stdio import stdio_server
 
-from tools import EdgeTTSTools
-from models import (
+from .tools import EdgeTTSTools
+from .models import (
     TextToSpeechRequest,
     ListVoicesRequest,
     SaveAudioRequest,
-    GenerateSubtitlesRequest
+    GenerateSubtitlesRequest,
+    BatchTextToSpeechRequest
 )
 
 
@@ -27,6 +28,7 @@ class EdgeTTSServer:
         
         # 注册工具处理函数
         self.server.tool("text_to_speech")(self.handle_text_to_speech)
+        self.server.tool("batch_text_to_speech")(self.handle_batch_text_to_speech)
         self.server.tool("list_voices")(self.handle_list_voices)
         self.server.tool("save_audio")(self.handle_save_audio)
         self.server.tool("get_voice_info")(self.handle_get_voice_info)
@@ -155,6 +157,28 @@ class EdgeTTSServer:
             
         except Exception as e:
             logger.error(f"生成字幕失败: {str(e)}")
+            return self._create_error_response({
+                "code": 1003,
+                "message": f"参数验证失败: {str(e)}"
+            })
+    
+    async def handle_batch_text_to_speech(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """处理批量文本转语音请求"""
+        try:
+            # 验证参数
+            request = BatchTextToSpeechRequest(**arguments)
+            
+            # 调用工具
+            result = await self.tools.batch_text_to_speech(request)
+            
+            # 检查是否有错误
+            if "error" in result:
+                return self._create_error_response(result["error"])
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"批量文本转语音处理失败: {str(e)}")
             return self._create_error_response({
                 "code": 1003,
                 "message": f"参数验证失败: {str(e)}"

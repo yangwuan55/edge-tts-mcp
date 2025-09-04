@@ -2,16 +2,18 @@ from typing import Dict, Any, List, Optional
 import asyncio
 import base64
 import os
-from models import (
+from .models import (
     TextToSpeechRequest, 
     ListVoicesRequest, 
     AudioResponse, 
     SaveAudioRequest,
     GenerateSubtitlesRequest,
     VoiceInfo,
-    ErrorResponse
+    ErrorResponse,
+    BatchTextToSpeechRequest,
+    VoiceSegment
 )
-from utils import EdgeTTSClient
+from .utils import EdgeTTSClient
 
 
 class EdgeTTSTools:
@@ -68,6 +70,12 @@ class EdgeTTSTools:
     async def list_voices(self, request: ListVoicesRequest) -> Dict[str, Any]:
         """语音列表查询工具"""
         try:
+            # 如果没有过滤条件，返回摘要信息避免大量数据
+            if not any([request.locale, request.gender, request.name_pattern]):
+                summary = await self.client.get_voice_list_summary()
+                return summary
+            
+            # 有过滤条件时返回过滤后的结果
             voices = await self.client.filter_voices(
                 locale=request.locale,
                 gender=request.gender,
@@ -157,6 +165,113 @@ class EdgeTTSTools:
         except Exception as e:
             return self._create_error_response(1005, f"生成字幕失败: {str(e)}")
 
+    async def batch_text_to_speech(self, request: BatchTextToSpeechRequest) -> Dict[str, Any]:
+        """批量文本转语音工具"""
+        try:
+            import tempfile
+            import os
+            from pydub import AudioSegment
+            import hashlib
+            import time
+            
+            # 生成唯一文件名
+            timestamp = int(time.time())
+            segments_hash = hashlib.md5(str([seg.text for seg in request.segments]).encode()).hexdigest()[:8]
+            filename = request.output_filename or f"batch_tts_{timestamp}_{segments_hash}.{request.format}"
+            
+            # 处理每个语音段
+            processed_segments = []
+            errors = []
+            
+            for i, segment in enumerate(request.segments):
+                try:
+                    # 验证语音是否存在
+                    voice_info = await self.client.get_voice_info(segment.voice)
+                    if not voice_info:
+                        errors.append({
+                            "index": i,
+                            "error": f"语音不存在: {segment.voice}"
+                        })
+                        continue
+                    
+                    # 生成单个语音段的音频
+                    audio_data = await self.client.text_to_speech(
+                        text=segment.text,
+                        voice=segment.voice,
+                        rate=segment.rate,
+                        volume=segment.volume,
+                        pitch=segment.pitch,
+                        boundary=segment.boundary
+                    )
+                    
+                    processed_segments.append({
+                        "index": i,
+                        "audio_data": audio_data,
+                        "text": segment.text,
+                        "voice": segment.voice
+                    })
+                    
+                except Exception as e:
+                    errors.append({
+                        "index": i,
+                        "error": f"处理语音段失败: {str(e)}"
+                    })
+            
+            # 如果没有成功处理的语音段，返回错误
+            if not processed_segments:
+                return self._create_error_response(1005, "所有语音段处理失败", {"errors": errors})
+            
+            # 合并音频文件
+            if len(processed_segments) == 1:
+                # 只有一个语音段，直接保存
+                audio_data = processed_segments[0]["audio_data"]
+                with open(filename, 'wb') as f:
+                    f.write(audio_data)
+            else:
+                # 多个语音段，需要合并
+                combined_audio = None
+                
+                for segment in processed_segments:
+                    # 创建临时文件
+                    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                        temp_file.write(segment["audio_data"])
+                        temp_filename = temp_file.name
+                    
+                    try:
+                        # 加载音频段
+                        audio_segment = AudioSegment.from_file(temp_filename, format="mp3")
+                        
+                        if combined_audio is None:
+                            combined_audio = audio_segment
+                        else:
+                            combined_audio += audio_segment
+                        
+                    finally:
+                        # 清理临时文件
+                        os.unlink(temp_filename)
+                
+                # 保存合并后的音频
+                if combined_audio:
+                    combined_audio.export(filename, format=request.format)
+                
+            # 计算文件大小
+            file_size = os.path.getsize(filename)
+            
+            return {
+                "success": True,
+                "file_path": os.path.abspath(filename),
+                "file_size": file_size,
+                "segment_count": len(request.segments),
+                "processed_count": len(processed_segments),
+                "failed_count": len(errors),
+                "errors": errors,
+                "message": f"批量音频文件已生成: {filename} ({file_size} 字节)",
+                "_type": "file_reference"
+            }
+            
+        except Exception as e:
+            return self._create_error_response(1005, f"批量音频生成失败: {str(e)}")
+
     def _create_error_response(self, code: int, message: str, data: Optional[dict] = None) -> Dict[str, Any]:
         """创建错误响应"""
         return {
@@ -185,6 +300,36 @@ class EdgeTTSTools:
                         "format": {"type": "string", "description": "输出格式", "default": "mp3"}
                     },
                     "required": ["text"]
+                }
+            },
+            {
+                "name": "batch_text_to_speech",
+                "description": "批量文本转语音，支持多个语音配置合成一个音频文件",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "segments": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "text": {"type": "string", "description": "要转换的文本内容"},
+                                    "voice": {"type": "string", "description": "语音名称", "default": "en-US-EmmaMultilingualNeural"},
+                                    "rate": {"type": "string", "description": "语速调整", "default": "+0%"},
+                                    "volume": {"type": "string", "description": "音量调整", "default": "+0%"},
+                                    "pitch": {"type": "string", "description": "音调调整", "default": "+0Hz"},
+                                    "boundary": {"type": "string", "description": "边界类型", "default": "SentenceBoundary"}
+                                },
+                                "required": ["text"]
+                            },
+                            "description": "语音段配置列表",
+                            "minItems": 1,
+                            "maxItems": 20
+                        },
+                        "format": {"type": "string", "description": "输出格式", "default": "mp3"},
+                        "output_filename": {"type": "string", "description": "输出文件名（可选）"}
+                    },
+                    "required": ["segments"]
                 }
             },
             {
